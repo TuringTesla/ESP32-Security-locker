@@ -1,0 +1,170 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include "base64.h"
+#include <ESP32Servo.h>
+
+Servo myservo;
+Servo myservo2;
+
+void makeCall();
+
+const char* ssid = "";
+const char* password = "";
+
+String accountSID = "";
+String authToken  = "";
+
+String toNumber   = "+";
+String fromNumber = "+";
+
+WiFiClientSecure client;
+
+// Global Variables
+int enteredPassword;
+int correctPassword = 37227;
+int no;
+
+void setup() {
+  ESP32PWM::allocateTimer(0);
+ESP32PWM::allocateTimer(1);
+  myservo.attach(12);
+  myservo2.attach(13);
+  myservo.write(90);
+  myservo2.write(90);
+
+  Serial.begin(9600);
+
+  WiFi.begin(ssid, password);
+
+  Serial.println("Connecting");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.print("Connected. IP: ");
+  Serial.println(WiFi.localIP());
+
+  pinMode(32, INPUT_PULLDOWN);
+  pinMode(33, INPUT_PULLDOWN);
+  pinMode(27, INPUT_PULLDOWN);
+  pinMode(2, OUTPUT);
+
+  enteredPassword = 0;
+  no = 0;
+}
+
+void loop() {
+
+  if (digitalRead(32)) {
+    myservo.write(90);
+  myservo2.write(90);
+    enteredPassword = (10 * enteredPassword) + 2;
+    no++;
+
+    Serial.print("Current Password: ");
+    Serial.println(enteredPassword);
+
+    while (digitalRead(32));
+    delay(200);
+  }
+
+  if (digitalRead(33)) {myservo.write(90);
+  myservo2.write(90);
+    enteredPassword = (10 * enteredPassword) + 3;
+    no++;
+
+    Serial.print("Current Password: ");
+    Serial.println(enteredPassword);
+
+    while (digitalRead(33));
+    delay(200);
+  }
+
+  if (digitalRead(27)) {
+    myservo.write(90);
+  myservo2.write(90);
+    enteredPassword = (10 * enteredPassword) + 7;
+    no++;
+
+    Serial.print("Current Password: ");
+    Serial.println(enteredPassword);
+
+    while (digitalRead(27));
+    delay(200);
+  }
+
+  if (no == 5) {
+
+    Serial.print("Final Entered Password: ");
+    Serial.println(enteredPassword);
+
+    if (correctPassword == enteredPassword) {
+
+      Serial.println("ACCESS GRANTED");
+      myservo.write(0);
+  myservo2.write(0);
+
+
+      
+
+    } 
+    else {
+
+      Serial.println("WRONG PASSWORD");
+
+      client.setInsecure();
+      makeCall();
+
+    }
+
+    no = 0;
+    enteredPassword = 0;
+
+    Serial.println("Password Reset");
+
+    digitalWrite(2, HIGH);
+    delay(1000);
+    digitalWrite(2, LOW);
+    delay(1000);
+    digitalWrite(2, HIGH);
+    delay(1000);
+    digitalWrite(2, LOW);
+    delay(1000);
+  }
+}
+
+void makeCall() {
+
+  HTTPClient http;
+
+  String url =
+    "https://api.twilio.com/2010-04-01/Accounts/" +
+    accountSID + "/Calls.json";
+
+  http.begin(client, url);
+
+  String auth = accountSID + ":" + authToken;
+  String encodedAuth = base64::encode(auth);
+
+  http.addHeader("Authorization", "Basic " + encodedAuth);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+  String postData =
+    "To=" + toNumber +
+    "&From=" + fromNumber +
+    "&Twiml=<Response><Say>Alert Alert Alert! Unauthorized access to locker.</Say></Response>";
+
+  int httpCode = http.POST(postData);
+
+  Serial.print("HTTP Code: ");
+  Serial.println(httpCode);
+
+  String response = http.getString();
+  Serial.println(response);
+
+  http.end();
+}
